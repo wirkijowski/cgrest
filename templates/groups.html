@@ -1,0 +1,19 @@
+$def with (groups, ctxpath)
+
+
+Subgroups:<br>
+$for group_name in groups.keys():
+    $if group_name != 'controllers' and group_name.endswith('tasks') == False:
+        <a href="$ctxpath/$group_name"> $group_name </a><br>
+        <br>
+        
+Control files: <br>
+$for controller in groups['controllers']:
+    $controller[0]: $controller[1] <br>
+
+Taks: <br>
+$for taskfile in groups.keys():
+    
+    $if taskfile.endswith('tasks'):
+        <br> $taskfile: $groups[taskfile]<br>
+
