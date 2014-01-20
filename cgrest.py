@@ -1,6 +1,5 @@
 from os import listdir
 import os.path
-
 import web
 
 urls = (
@@ -17,7 +16,6 @@ cgpath = '/sys/fs/cgroup'
 def get_subsystems(cgpath=cgpath):
     #todo: path validation (remove ../../ etc)
 
-    #group_path = cgpath + ppath
     return ([ name for name in listdir(cgpath) if
         os.path.isdir(os.path.join(cgpath, name)) ])
 
@@ -27,7 +25,6 @@ def get_groups(parent_group='', cgpath=cgpath):
     groups = {
             'controllers': []
             }
-    tasks = [] 
     # for each subsystem check what hierarhies are connected to it
     # or deeper levels of hierarchies; only one down
     for system in subsystems:
@@ -58,12 +55,14 @@ def get_groups(parent_group='', cgpath=cgpath):
                 groups['controllers'].append([name, values])
             elif name == 'tasks':
                 file = os.path.join(path, 'tasks')
+
+                tasks = [] 
                 with open(file, 'r') as f:
                     for line in f:
                         line = line.rstrip('\n')
                         tasks.append(line)
 
-                groups[system + 'tasks'] = tasks 
+                groups[system + '.tasks'] = tasks 
     
     return groups
 
