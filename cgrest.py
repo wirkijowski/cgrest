@@ -5,7 +5,8 @@ import json
 
 urls = (
         '/', 'index',
-        '/subsystems', 'subsystems',
+        '/subsystems/*$', 'subsystems',
+        '/subsystems/[\w\.\/]+$', 'subsystems',
         '/group/*$', 'group',
         '/group/[\w\.\/]+$', 'group',
         )
@@ -14,90 +15,136 @@ render = web.template.render('templates/')
 
 cgpath = '/sys/fs/cgroup'
 
-def get_subsystems(cgpath=cgpath, homedomain='http://localhost'):
+def get_path_contents(cgpath=cgpath, subpath=''):
+
+    path = os.path.join(cgpath, subpath)
+    content = {
+               'subgroups':    {},
+               'controlfiles': {},
+               'tasks':        {},
+               }
+
+    for name in listdir(path):
+        # directories mean subgroups
+        if os.path.isdir(os.path.join(path, name)):
+            content['subgroups'][name] = {}
+        elif name == 'tasks':
+           file = os.path.join(path, 'tasks')
+           tasks = [] 
+           with open(file, 'r') as f:
+               for line in f:
+                   line = line.rstrip('\n')
+                   tasks.append(line)
+           content['tasks'] = tasks
+        elif name != 'tasks' and os.path.isfile(os.path.join(path, name)): 
+           values = []
+           file = os.path.join(path, name)
+           try:
+               with open(file, 'r') as f:
+                   for line in f:
+                       line = line.rstrip('\n')
+                       values.append(line)
+           except:
+               pass
+               #values = []
+           content['controlfiles'].update({ name: values })
+
+    return content
+
+
+def get_subsystems(root_hierarchy='', cgpath=cgpath, homedomain='http://localhost'):
     #todo: path validation (remove ../../ etc)
-    subsystems = {}
-    for name in listdir(cgpath):
-        if os.path.isdir(os.path.join(cgpath, name)):
-            subsystems[name] = {
-                    'uri': os.path.join(homedomain, 'subsystems', name),
-                    }
+    subsystems = {
+            'subsystems': {}
+            }
+
+    urlmap = 'subsystems'
+    if root_hierarchy == '':
             
+        for name in listdir(cgpath):
+            if os.path.isdir(os.path.join(cgpath, name)):
+                subsystems['subsystems'].update( {
+                            name: {
+                                'uri': os.path.join(homedomain, urlmap, name),
+                                }
+                        })
+    else:
+        subsystems = get_path_contents(os.path.join(cgpath, root_hierarchy))
+        for name in subsystems['subgroups'].keys():
+            subsystems['subgroups'][name] = {
+                    'uri': os.path.join(homedomain, urlmap, root_hierarchy, name),
+                    }
+                            
     return subsystems
+
 
 def get_group(current_group='', cgpath=cgpath, homedomain='http://localhost'):
     subsystems = get_subsystems(homedomain=homedomain)
-
+    urlmap = 'group'
+    
+    #add basic attributes to group resource          
     parent, name = os.path.split(current_group)
+    
     group = {
-            'name':         name,
-            'parent':       {
+            'name': name,
+            'parent':    {
                 'hierarchy': parent,
-                'uri': os.path.join(homedomain, 'group', parent),
-                },
-            'subsystems':   subsystems, 
-            'subgroups':    {},
+                'uri': os.path.join(homedomain, urlmap, parent),
+            },
+            'subsystems': subsystems['subsystems'],
+            'subgroups': {},
             'controlfiles': {},
-            'tasks':        {},
-            }
-    # for each subsystem check what hierarhies are connected to it
-    # or deeper levels of hierarchies; only one down
-    for system in subsystems.keys():
-        path = os.path.join(cgpath, system, current_group) 
-        for name in listdir(path):
-            # subhierarchies are directories
-            if os.path.isdir(os.path.join(path, name)):
-                # check if hierarchy already added into our structure
-                if name in group['subgroups']:
-                    templist = group['subgroups'][name]['subsystems'] 
-                    templist.append(system)
-                    group['subgroups'][name]['subsystems'] = templist
-                # if not, add hierarchy and remeber to what system it's
-                # attached to
-                else:
-                    group['subgroups'][name] = {
-                            'uri': (os.path.join(homedomain, 'group',
-                                current_group, name)) ,
-                            'subsystems': [system, ],
-                            }
-            elif name.startswith((system + '.')):
-                values = []
-                file = os.path.join(path, name)
-                try:
-                    with open(file, 'r') as f:
-                        for line in f:
-                            line = line.rstrip('\n')
-                            values.append(line)
-                except:
-                    pass
-                   # values = []
-                controlfile = { name: values }
-                group['controlfiles'] = dict(group['controlfiles'].items() + controlfile.items() )
+            'tasks': {},
+        }
 
-            elif name == 'tasks':
-                file = os.path.join(path, 'tasks')
-
-                tasks = [] 
-                with open(file, 'r') as f:
-                    for line in f:
-                        line = line.rstrip('\n')
-                        tasks.append(line)
-                taskdict = { system + '.tasks': tasks }
-                group['tasks'] = dict(group['tasks'].items() + taskdict.items() )
+    for system in subsystems['subsystems'].keys():
+        newgroup = get_path_contents(cgpath, os.path.join(system, current_group))
+        # add uri for every subgroup
+        for name in newgroup['subgroups'].keys():
+            newgroup['subgroups'][name] = { 
+                    'uri':  (os.path.join(homedomain, urlmap,
+                       current_group, name)) ,
+                    }
+        # create key for current subsystem's tasks
+        group['tasks'].update({ system + '.tasks': newgroup.pop('tasks') })
+        group['controlfiles'].update(newgroup['controlfiles'])
+        group['subgroups'].update(newgroup['subgroups'])
     
     return group
 
 class index:
     def GET(self):
-        links = [ 'subsystems', 'group' ]
-        return render.index(links)
+        content = { 
+                'subsystems': {
+                    'uri': os.path.join(web.ctx.homedomain, 'subsystems')
+                    },
+                'group': {
+                    'uri': os.path.join(web.ctx.homedomain, 'group')
+                    }
+                }
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+            web.header('Content-Type', 'application/json')
+            return json.dumps(content, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.index(content)
 
 class subsystems:
 
     def GET(self):
-        subsys = get_subsystems(homedomain=web.ctx.homedomain)
-        return json.dumps(subsys, indent=4)
-     #   return render.subsystems(subsys)
+        ctxpath = web.ctx.path
+        parent = os.path.relpath(web.ctx.path, '/subsystems')
+        if parent == '.':
+            parent = ''
+
+        subsystems = get_subsystems(parent, homedomain=web.ctx.homedomain)
+        
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+            web.header('Content-Type', 'application/json')
+            return json.dumps(subsystems, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.subsystems(subsystems)
 
    
 class group:
@@ -107,9 +154,13 @@ class group:
         if parent == '.':
             parent = ''
         group = get_group(parent, homedomain=web.ctx.homedomain)
-#        return render.group(group, ctxpath)
-        return json.dumps(group, indent=4)
-
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+             web.header('Content-Type', 'application/json')
+             return json.dumps(group, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.group(group)
+           
     def POST(self):
         pass
 
