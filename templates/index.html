@@ -1,6 +1,6 @@
-$def with (links)
+$def with (content)
 
-$for link in links:
-    <a href="/$link"> $link </a><br>
+$for item in content.keys():
+    <a href="$content[item]['uri']"> $item </a><br>
 
 

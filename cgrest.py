@@ -54,22 +54,27 @@ def get_path_contents(cgpath=cgpath, subpath=''):
 
 def get_subsystems(root_hierarchy='', cgpath=cgpath, homedomain='http://localhost'):
     #todo: path validation (remove ../../ etc)
-    subsystems = {}
+    subsystems = {
+            'subsystems': {}
+            }
+
     urlmap = 'subsystems'
     if root_hierarchy == '':
             
         for name in listdir(cgpath):
             if os.path.isdir(os.path.join(cgpath, name)):
-                subsystems[name] = {
-                        'uri': os.path.join(homedomain, urlmap, name),
-                        }
+                subsystems['subsystems'].update( {
+                            name: {
+                                'uri': os.path.join(homedomain, urlmap, name),
+                                }
+                        })
     else:
-        subsystems= get_path_contents(os.path.join(cgpath, root_hierarchy))
+        subsystems = get_path_contents(os.path.join(cgpath, root_hierarchy))
         for name in subsystems['subgroups'].keys():
             subsystems['subgroups'][name] = {
                     'uri': os.path.join(homedomain, urlmap, root_hierarchy, name),
                     }
-    
+                            
     return subsystems
 
 
@@ -86,13 +91,13 @@ def get_group(current_group='', cgpath=cgpath, homedomain='http://localhost'):
                 'hierarchy': parent,
                 'uri': os.path.join(homedomain, urlmap, parent),
             },
-            'subsystems': subsystems,
+            'subsystems': subsystems['subsystems'],
             'subgroups': {},
             'controlfiles': {},
             'tasks': {},
         }
 
-    for system in subsystems.keys():
+    for system in subsystems['subsystems'].keys():
         newgroup = get_path_contents(cgpath, os.path.join(system, current_group))
         # add uri for every subgroup
         for name in newgroup['subgroups'].keys():
@@ -109,8 +114,20 @@ def get_group(current_group='', cgpath=cgpath, homedomain='http://localhost'):
 
 class index:
     def GET(self):
-        links = [ 'subsystems', 'group' ]
-        return render.index(links)
+        content = { 
+                'subsystems': {
+                    'uri': os.path.join(web.ctx.homedomain, 'subsystems')
+                    },
+                'group': {
+                    'uri': os.path.join(web.ctx.homedomain, 'group')
+                    }
+                }
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+            web.header('Content-Type', 'application/json')
+            return json.dumps(content, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.index(content)
 
 class subsystems:
 
@@ -120,9 +137,14 @@ class subsystems:
         if parent == '.':
             parent = ''
 
-        subsys = get_subsystems(parent, homedomain=web.ctx.homedomain)
-        return json.dumps(subsys, indent=4)
-     #   return render.subsystems(subsys)
+        subsystems = get_subsystems(parent, homedomain=web.ctx.homedomain)
+        
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+            web.header('Content-Type', 'application/json')
+            return json.dumps(subsystems, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.subsystems(subsystems)
 
    
 class group:
@@ -132,9 +154,13 @@ class group:
         if parent == '.':
             parent = ''
         group = get_group(parent, homedomain=web.ctx.homedomain)
-#        return render.group(group, ctxpath)
-        return json.dumps(group, indent=4)
-
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+             web.header('Content-Type', 'application/json')
+             return json.dumps(group, indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return render.group(group)
+           
     def POST(self):
         pass
 
