@@ -1,5 +1,20 @@
-$def with (subsys)
+$def with (subsystems)
 
-$for system in subsys:
-    $system<br>
+$if 'subsystems' in subsystems.keys():
+    <h3> Subsystems: </h3>
+    $for system in subsystems['subsystems'].keys():
+        <a href="$subsystems['subsystems'][system]['uri']">$system</a><br>
 
+$else:
+    <h3> Subgroups:  </h3>
+    $for group in subsystems['subgroups'].keys():
+        <a href="$subsystems['subgroups'][group]['uri']">$group</a><br>
+    <br>
+    <h3> Control files: </h3>
+    $for file in subsystems['controlfiles'].keys():
+        $file: $subsystems['controlfiles'][file]</a><br>
+    <br>
+    <h3> Tasks: </h3>
+    $subsystems['tasks']
+        
+    
