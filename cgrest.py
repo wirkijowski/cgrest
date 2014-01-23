@@ -55,15 +55,20 @@ def get_path_contents(cgpath=cgpath, subpath=''):
 def get_subsystems(root_hierarchy='', cgpath=cgpath, homedomain='http://localhost'):
     #todo: path validation (remove ../../ etc)
     subsystems = {}
+    urlmap = 'subsystems'
     if root_hierarchy == '':
             
         for name in listdir(cgpath):
             if os.path.isdir(os.path.join(cgpath, name)):
                 subsystems[name] = {
-                        'uri': os.path.join(homedomain, 'subsystems', name),
+                        'uri': os.path.join(homedomain, urlmap, name),
                         }
     else:
         subsystems= get_path_contents(os.path.join(cgpath, root_hierarchy))
+        for name in subsystems['subgroups'].keys():
+            subsystems['subgroups'][name] = {
+                    'uri': os.path.join(homedomain, urlmap, root_hierarchy, name),
+                    }
     
     return subsystems
 
