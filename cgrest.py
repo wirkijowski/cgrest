@@ -36,7 +36,7 @@ def get_path_contents(cgpath=cgpath, subpath=''):
                    line = line.rstrip('\n')
                    tasks.append(line)
            content['tasks'] = tasks
-        else: 
+        elif name != 'tasks' and os.path.isfile(os.path.join(path, name)): 
            values = []
            file = os.path.join(path, name)
            try:
@@ -52,15 +52,19 @@ def get_path_contents(cgpath=cgpath, subpath=''):
     return content
 
 
-def get_subsystems(cgpath=cgpath, homedomain='http://localhost'):
+def get_subsystems(root_hierarchy='', cgpath=cgpath, homedomain='http://localhost'):
     #todo: path validation (remove ../../ etc)
     subsystems = {}
-    for name in listdir(cgpath):
-        if os.path.isdir(os.path.join(cgpath, name)):
-            subsystems[name] = {
-                    'uri': os.path.join(homedomain, 'subsystems', name),
-                    }
+    if root_hierarchy == '':
             
+        for name in listdir(cgpath):
+            if os.path.isdir(os.path.join(cgpath, name)):
+                subsystems[name] = {
+                        'uri': os.path.join(homedomain, 'subsystems', name),
+                        }
+    else:
+        subsystems= get_path_contents(os.path.join(cgpath, root_hierarchy))
+    
     return subsystems
 
 
@@ -106,7 +110,12 @@ class index:
 class subsystems:
 
     def GET(self):
-        subsys = get_subsystems(homedomain=web.ctx.homedomain)
+        ctxpath = web.ctx.path
+        parent = os.path.relpath(web.ctx.path, '/subsystems')
+        if parent == '.':
+            parent = ''
+
+        subsys = get_subsystems(parent, homedomain=web.ctx.homedomain)
         return json.dumps(subsys, indent=4)
      #   return render.subsystems(subsys)
 
