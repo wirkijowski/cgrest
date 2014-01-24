@@ -1,4 +1,5 @@
 from os import listdir
+from functools import wraps
 import os.path
 import web
 import json
@@ -112,7 +113,26 @@ def get_group(current_group='', cgpath=cgpath, homedomain='http://localhost'):
     
     return group
 
+
+def contentdecorator(func):
+    @wraps(func)
+    def getdata(*args, **kwargs):
+        template = web.template.frender('templates/' +
+            args[0].__class__.__name__ + '.html')
+
+        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
+            web.header('Content-Type', 'application/json')
+            return json.dumps(func(*args, **kwargs), indent=4)
+        else:
+            web.header('Content-Type', 'text/html')
+            return template(func(*args, **kwargs)) 
+
+    return getdata
+
+
 class index:
+
+    @contentdecorator
     def GET(self):
         content = { 
                 'subsystems': {
@@ -122,15 +142,12 @@ class index:
                     'uri': os.path.join(web.ctx.homedomain, 'group')
                     }
                 }
-        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
-            web.header('Content-Type', 'application/json')
-            return json.dumps(content, indent=4)
-        else:
-            web.header('Content-Type', 'text/html')
-            return render.index(content)
+        
+        return content
 
 class subsystems:
-
+    
+    @contentdecorator
     def GET(self):
         ctxpath = web.ctx.path
         parent = os.path.relpath(web.ctx.path, '/subsystems')
@@ -139,28 +156,20 @@ class subsystems:
 
         subsystems = get_subsystems(parent, homedomain=web.ctx.homedomain)
         
-        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
-            web.header('Content-Type', 'application/json')
-            return json.dumps(subsystems, indent=4)
-        else:
-            web.header('Content-Type', 'text/html')
-            return render.subsystems(subsystems)
+        return subsystems
 
-   
 class group:
+
+    @contentdecorator 
     def GET(self):
         ctxpath = web.ctx.path
         parent = os.path.relpath(web.ctx.path, '/group')
         if parent == '.':
             parent = ''
         group = get_group(parent, homedomain=web.ctx.homedomain)
-        if web.ctx.env.get('HTTP_ACCEPT') == 'application/json':
-             web.header('Content-Type', 'application/json')
-             return json.dumps(group, indent=4)
-        else:
-            web.header('Content-Type', 'text/html')
-            return render.group(group)
-           
+        
+        return group           
+
     def POST(self):
         pass
 
